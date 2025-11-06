@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Calculadora de Costo - Jesus Benitez</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      padding-top: 2rem;
+      padding-bottom: 3rem;
+      background: linear-gradient(180deg, #f7fafc 0%, #eef2f7 100%);
+      min-height: 100vh;
+    }
+    .card {
+      border-radius: 1rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .tax-list small { white-space: pre-line; }
+    .value-large { font-size: 1.35rem; font-weight: 700; }
+    @media (max-width: 575px) {
+      .value-large { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8 col-md-10">
+        <div class="card p-4">
+          <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+              <h3 class="mb-0">Calculadora de Costo</h3>
+              <small class="text-muted">by JESUS BENITEZ — v.4 (Lista Simple)</small>
+            </div>
+            <div class="text-end">
+              <button id="fullscreenBtn" class="btn btn-outline-secondary btn-sm">Pantalla completa</button>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            
+            <div class="col-md-6">
+              <label for="categoriaPrincipal" class="form-label">Categoría</label>
+              <select id="categoriaPrincipal" class="form-select">
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label for="precioNeto" class="form-label">Costo s/iva o C/iva</label>
+              <input id="precioNeto" type="text" class="form-control" placeholder="Ej: 1234.56" inputmode="decimal">
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-success" data-rate="0.21" data-name="IVA 21%">Aplicar IVA (21%)</button>
+                <button class="btn btn-primary" data-rate="0.105" data-name="10.5%">Aplicar 10,5%</button>
+                <button class="btn btn-warning text-dark" data-rate="0.03" data-name="IIBB 3%">Aplicar IIBB (3%)</button>
+                <button class="btn btn-purple" id="imp15Btn" style="background:#9C27B0;color:white;" data-rate="0.015" data-name="IMPUESTOS 1.5%">IMPUESTOS 1,5%</button>
+                <button id="calcularBtn" class="btn btn-secondary">Calcular</button>
+                <button id="descargarPdfBtn" class="btn btn-danger">Descargar PDF</button>
+                <button id="limpiarBtn" class="btn btn-outline-dark">Limpiar</button>
+                <button id="refrescarBtn" class="btn btn-outline-primary">Refrescar</button>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mt-3 p-3 bg-white rounded-3">
+                <h6 class="mb-2">Impuestos aplicados</h6>
+                <div id="impuestosAplicados" class="tax-list text-muted small">— No hay impuestos aplicados —</div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mt-3 p-3 bg-white rounded-3">
+                <h6 class="mb-2">Resumen</h6>
+                <div class="d-flex justify-content-between">
+                  <div>Precio costo (con impuestos):</div>
+                  <div id="precioConImpuestos" class="value-large">—</div>
+                </div>
+                <div class="d-flex justify-content-between mt-2">
+                  <div>Margen aplicado:</div>
+                  <div id="margenTexto" class="text-muted">—</div>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                  <div class="fw-bold">Precio Final:</div>
+                  <div id="precioFinal" class="value-large text-success">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <small class="text-muted">Consejos: ingresa números positivos. Los impuestos se suman al precio neto y luego se aplica el margen de la categoría.</small>
+            </div>
+          </div>
+        </div>
+
+        <footer class="text-center mt-3 text-muted small">
+          Generado por Jesus Benitez
+        </footer>
+      </div>
+    </div>
+  </main>
+
+  <script>
+  // MODIFICACIÓN: Objeto de categorías reemplazado por la lista de la imagen.
+  // Se han desglosado las sub-categorías (ej. Fliares, Indiv) en entradas separadas.
+  const CATEGORIAS = {
+    "Kiosco/Chocolates, Alfajores, Turrones, Barritas": 0.70,
+    "Kiosco/Chicles, Caramelos & Carm. Sueltos": 0.80,
+    "TABACOS / CIGARRILLOS": 0.23,
+    "TABACOS / PAPELES Y FILTROS": 0.60,
+    "ALMACEN / PANADERIA": 0.50,
+    "ALMACEN": 0.60,
+    "BEBIDAS SIN ALCOHOL / AGUAS ": 0.60,
+    "BEBIDAS SIN ALCOHOL / GASEOSAS ": 0.60,
+    "CERVEZAS": 0.50,
+    "BEBIDAS CON ALCOHOL / VINOS": 0.50,
+    "Bebidas blancas, Aperitivos, Whisky, Champagne": 0.60,
+    "FRESCOS / LACTEOS ": 0.40,
+    "FRESCOS / FIAMBRES": 0.50,
+    "CONGELADOS": 0.60,
+    "LIMPIEZA": 0.60,
+    "PERFUMERIA / FARMACIA": 0.60,
+    "HOGAR / JUGUETERIA": 0.80,
+    "HOGAR / BAZAR": 0.60,
+    "GASTRONOMIA": 0.50
+  };
+  // FIN DE LA MODIFICACIÓN
+
+  // Estado
+  let netPrice = null;
+  const appliedTaxes = {}; // { "IVA 21%": amount, ... }
+
+  // Elementos DOM
+  const categoriaPrincipalEl = document.getElementById('categoriaPrincipal');
+  // ELIMINADO: const subCategoriaEl = document.getElementById('subCategoria');
+  const precioNetoEl = document.getElementById('precioNeto');
+  const impuestosAplicadosEl = document.getElementById('impuestosAplicados');
+  const precioConImpuestosEl = document.getElementById('precioConImpuestos');
+  const precioFinalEl = document.getElementById('precioFinal');
+  const margenTextoEl = document.getElementById('margenTexto');
+  const botonesImpuestos = document.querySelectorAll('button[data-rate]');
+  const calcularBtn = document.getElementById('calcularBtn');
+  const descargarPdfBtn = document.getElementById('descargarPdfBtn');
+  const limpiarBtn = document.getElementById('limpiarBtn');
+  const refrescarBtn = document.getElementById('refrescarBtn');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+  // ELIMINADA: La función populateSubCategorias() ya no es necesaria.
+
+  // MODIFICADA: initCategorias ahora usa el objeto plano CATEGORIAS
+  function initCategorias() {
+    Object.keys(CATEGORIAS).forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      categoriaPrincipalEl.appendChild(opt);
+    });
+    
+    // ELIMINADO: populateSubCategorias();
+    updateDisplay(); // Llamamos a updateDisplay para cargar el margen inicial
+  }
+
+  function parsePrice(value) {
+    if (!value) return null;
+    const normalized = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+    const v = Number(normalized);
+    if (Number.isFinite(v) && v >= 0) return v;
+    return null;
+  }
+
+  function formatCurrency(num) {
+    if (num === null || num === undefined || !Number.isFinite(num)) return '—';
+    return num.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 });
+  }
+
+  function showImpuestos() {
+    if (Object.keys(appliedTaxes).length === 0) {
+      impuestosAplicadosEl.textContent = '— No hay impuestos aplicados —';
+      return;
+    }
+    const lines = Object.entries(appliedTaxes).map(([name, amount]) => `${name}: +${formatCurrency(amount)}`);
+    impuestosAplicadosEl.innerHTML = '<small>' + lines.join('\n') + '</small>';
+  }
+
+  // MODIFICADA: Lógica de cálculo actualizada para usar solo la categoría principal
+  function updateDisplay() {
+    const parsedPrice = parsePrice(precioNetoEl.value);
+    if (parsedPrice !== null) {
+      netPrice = parsedPrice;
+    }
+
+    if (netPrice === null) {
+      precioConImpuestosEl.textContent = '—';
+      precioFinalEl.textContent = '—';
+      margenTextoEl.textContent = '—';
+      showImpuestos();
+      return;
+    }
+
+    const totalTax = Object.values(appliedTaxes).reduce((a,b) => a + b, 0);
+    const priceWithTaxes = netPrice + totalTax;
+
+    const mainCat = categoriaPrincipalEl.value; // Esta es ahora la única categoría
+    // ELIMINADO: const subCat = subCategoriaEl.value;
+
+    if (!mainCat) { // Solo validamos mainCat
+      precioFinalEl.textContent = '—';
+      margenTextoEl.textContent = 'Seleccione categoría';
+      precioConImpuestosEl.textContent = formatCurrency(priceWithTaxes);
+      return;
+    }
+
+    const margin = CATEGORIAS[mainCat] ?? 0; // Lógica de margen simplificada
+    const finalPrice = priceWithTaxes * (1 + margin);
+
+    precioConImpuestosEl.textContent = formatCurrency(priceWithTaxes);
+    precioFinalEl.textContent = formatCurrency(finalPrice);
+    
+    // Mostramos la categoría seleccionada en el margen
+    const catDisplay = mainCat.length > 30 ? mainCat.substring(0, 27) + '...' : mainCat;
+    margenTextoEl.textContent = `${(margin*100).toFixed(0)}% (${catDisplay})`;
+
+    showImpuestos();
+  }
+
+  function applyTax(name, rate) {
+    const parsed = parsePrice(precioNetoEl.value);
+    if (parsed === null) {
+      alert('Ingrese un precio neto válido antes de aplicar impuestos.');
+      return;
+    }
+    netPrice = parsed; 
+
+    if (appliedTaxes.hasOwnProperty(name)) {
+      alert(`${name} ya fue aplicado.`);
+      return;
+    }
+    const taxValue = netPrice * rate;
+    appliedTaxes[name] = taxValue;
+    updateDisplay();
+  }
+
+  // MODIFICADO: Lógica de PDF actualizada
+  async function downloadPdf() {
+    const parsed = parsePrice(precioNetoEl.value);
+      if (parsed === null) {
+      alert('Debe ingresar un precio neto válido antes de generar el PDF.');
+      return;
+    }
+    netPrice = parsed;
+    updateDisplay(); 
+
+    if (Object.keys(appliedTaxes).length === 0) {
+        alert('Debe aplicar al menos un impuesto antes de generar el PDF.');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const marginLeft = 48;
+    let y = 72;
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detalle de Precios con Impuestos', 300, y, { align: 'center' });
+
+    y += 36;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+
+    const now = new Date();
+    doc.text(`Fecha y hora: ${now.toLocaleString('es-AR')}`, marginLeft, y);
+    y += 20;
+    doc.text(`Precio Neto: ${formatCurrency(netPrice)}`, marginLeft, y);
+    y += 18;
+
+    Object.entries(appliedTaxes).forEach(([name, amount]) => {
+      doc.text(`${name}: +${formatCurrency(amount)}`, marginLeft, y);
+      y += 16;
+    });
+
+    y += 6;
+    const totalTax = Object.values(appliedTaxes).reduce((a,b) => a + b, 0);
+    const priceWithTaxes = netPrice + totalTax;
+    
+    const mainCat = categoriaPrincipalEl.value; // Única categoría
+    
+    if (!mainCat) { // Validación simplificada
+        alert("Seleccione una categoría válida.");
+        return;
+    }
+
+    const margin = CATEGORIAS[mainCat] ?? 0; // Lógica simplificada
+    const finalPrice = priceWithTaxes * (1 + margin);
+
+    doc.text(`PRECIO COSTO (con impuestos): ${formatCurrency(priceWithTaxes)}`, marginLeft, y);
+    y += 20;
+    // PDF ahora muestra la categoría principal
+    doc.text(`Margen aplicado (${mainCat}): +${(margin*100).toFixed(0)}%`, marginLeft, y);
+    y += 28;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`PRECIO FINAL: ${formatCurrency(finalPrice)}`, marginLeft, y);
+    y += 36;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.text('Generado por Jesus Benitez', 300, y, { align: 'center' });
+
+    const filename = `detalle_precios_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}.pdf`;
+    doc.save(filename);
+  }
+
+  // Eventos
+  botonesImpuestos.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const name = btn.getAttribute('data-name');
+      const rate = parseFloat(btn.getAttribute('data-rate'));
+      applyTax(name, rate);
+    });
+  });
+
+  calcularBtn.addEventListener('click', () => {
+    const parsed = parsePrice(precioNetoEl.value);
+    if (parsed === null) {
+      alert('Ingrese un precio neto válido (número positivo).');
+      return;
+    }
+    netPrice = parsed;
+    updateDisplay();
+  });
+
+  descargarPdfBtn.addEventListener('click', async () => {
+    await downloadPdf();
+  });
+
+  limpiarBtn.addEventListener('click', () => {
+    precioNetoEl.value = '';
+    Object.keys(appliedTaxes).forEach(k => delete appliedTaxes[k]);
+    netPrice = null;
+    updateDisplay();
+  });
+
+  // MODIFICADO: Refrescar ya no necesita popular subcategorías
+  refrescarBtn.addEventListener('click', () => {
+    precioNetoEl.value = '';
+    Object.keys(appliedTaxes).forEach(k => delete appliedTaxes[k]);
+    netPrice = null;
+    
+    categoriaPrincipalEl.selectedIndex = 0; 
+    // ELIMINADO: populateSubCategorias();
+    updateDisplay(); // Añadido para actualizar el margen
+  });
+
+  // MODIFICADOS: Event listeners simplificados
+  categoriaPrincipalEl.addEventListener('change', updateDisplay); // Ahora llama a updateDisplay
+  // ELIMINADO: subCategoriaEl.addEventListener('change', updateDisplay);
+  
+  precioNetoEl.addEventListener('input', updateDisplay);
+
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.warn('No se pudo activar pantalla completa:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  });
+
+  // Inicialización
+  initCategorias(); 
+  updateDisplay();
+
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
